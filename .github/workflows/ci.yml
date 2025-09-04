@@ -1,0 +1,176 @@
+# .github/workflows/ci.yml - CI/CD Pipeline for API Automation
+name: API Automation Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Run tests daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+jobs:
+  api-tests:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: |
+        npm ci
+        npx playwright install
+    
+    - name: Run API connectivity check
+      run: |
+        curl -f https://jsonplaceholder.typicode.com/posts/1 || exit 1
+        echo "✅ API endpoint is accessible"
+    
+    - name: Run User API Tests (GET Operations)
+      run: npm run test:users
+      continue-on-error: false
+    
+    - name: Run Posts API Tests (POST Operations)
+      run: npm run test:posts
+      continue-on-error: false
+    
+    - name: Run Workflow Tests (API Chaining)
+      run: npm run test:workflow
+      continue-on-error: false
+    
+    - name: Generate Test Report
+      run: npm run report
+      if: always()
+    
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: test-results-${{ matrix.node-version }}
+        path: |
+          test-results/
+          playwright-report/
+        retention-days: 30
+
+  performance-validation:
+    runs-on: ubuntu-latest
+    needs: api-tests
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: |
+        npm ci
+        npx playwright install
+    
+    - name: Run Performance Tests
+      run: |
+        echo "🚀 Running performance validation..."
+        npm test -- --grep "performance"
+    
+    - name: API Response Time Check
+      run: |
+        echo "⚡ Validating API response times..."
+        node -e "
+          const start = Date.now();
+          fetch('https://jsonplaceholder.typicode.com/posts')
+            .then(r => r.json())
+            .then(data => {
+              const time = Date.now() - start;
+              console.log(\`✅ API response time: \${time}ms\`);
+              console.log(\`📊 Records retrieved: \${data.length}\`);
+              if (time > 3000) {
+                console.error('❌ API response too slow (>3s)');
+                process.exit(1);
+              }
+              console.log('✅ Performance validation passed');
+            })
+            .catch(err => {
+              console.error('❌ Performance test failed:', err);
+              process.exit(1);
+            });
+        "
+
+  test-report:
+    runs-on: ubuntu-latest
+    needs: [api-tests, performance-validation]
+    if: always()
+    
+    permissions:
+      pages: write
+      id-token: write
+    
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    
+    steps:
+    - name: Download test artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: test-results-20.x
+        path: ./test-results
+    
+    - name: Deploy test report to GitHub Pages
+      id: deployment
+      uses: actions/deploy-pages@v4
+      with:
+        artifact_name: test-results-20.x
+
+  validation-summary:
+    runs-on: ubuntu-latest
+    needs: [api-tests, performance-validation]
+    if: always()
+    
+    steps:
+    - name: Test Results Summary
+      run: |
+        echo "🎯 API Automation Pipeline Summary"
+        echo "================================="
+        
+        if [ "${{ needs.api-tests.result }}" = "success" ]; then
+          echo "✅ API Tests: PASSED"
+          echo "  - GET operations validated"
+          echo "  - POST operations with dynamic data"
+          echo "  - API chaining workflows verified"
+        else
+          echo "❌ API Tests: FAILED"
+          echo "  Check logs for test failures"
+        fi
+        
+        if [ "${{ needs.performance-validation.result }}" = "success" ]; then
+          echo "✅ Performance: PASSED"
+          echo "  - Response times under 3 seconds"
+          echo "  - API availability confirmed"
+        else
+          echo "⚠️ Performance: ISSUES DETECTED"
+          echo "  Check API response times"
+        fi
+        
+        echo ""
+        echo "📊 Pipeline Status:"
+        if [ "${{ needs.api-tests.result }}" = "success" ] && [ "${{ needs.performance-validation.result }}" = "success" ]; then
+          echo "🚀 ALL CHECKS PASSED - Ready for deployment"
+        else
+          echo "🔧 ISSUES FOUND - Review required"
+        fi

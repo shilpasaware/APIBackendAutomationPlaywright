@@ -1,0 +1,31 @@
+{
+  "name": "api-automation-demo",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "API Backend Automation using Playwright & Claude LLM",
+  "main": "index.js",
+  "scripts": {
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:headed": "playwright test --headed",
+    "test:users": "playwright test tests/api/users.spec.js",
+    "test:posts": "playwright test tests/api/posts.spec.js",
+    "test:workflow": "playwright test tests/api/workflow.spec.js",
+    "test:demo": "node demo-script.js",
+    "setup": "node setup.js",
+    "postinstall": "npx playwright install",
+    "report": "npx playwright show-report",
+    "report:open": "npx playwright show-report --host=0.0.0.0",
+    "test:report": "npm test && npm run report",
+    "clean": "rm -rf test-results playwright-report"
+  },
+  "keywords": ["playwright", "api-testing", "automation", "claude", "mcp"],
+  "author": "Shilpa Saware",
+  "license": "MIT",
+  "devDependencies": {
+    "@playwright/test": "^1.40.0"
+  },
+  "dependencies": {
+    "@faker-js/faker": "^8.0.0"
+  }
+}
