@@ -2,52 +2,68 @@
 import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
+  // Test directory
   testDir: './tests',
-  timeout: 30000,
+  
+  // Run tests in files in parallel
   fullyParallel: true,
+  
+  // Fail the build on CI if you accidentally left test.only in the source code
   forbidOnly: !!process.env.CI,
+  
+  // Retry on CI only
   retries: process.env.CI ? 2 : 0,
+  
+  // Opt out of parallel tests on CI
   workers: process.env.CI ? 1 : undefined,
   
-  // Enhanced reporter configuration
+  // Reporter to use. See https://playwright.dev/docs/test-reporters
   reporter: [
-    ['html', { 
-      outputFolder: 'playwright-report',
-      open: 'never'  // Don't auto-open browser
-    }],
-    ['json', { 
-      outputFile: 'test-results/test-results.json' 
-    }],
-    ['line'],
-    ['junit', { 
-      outputFile: 'test-results/junit.xml' 
-    }]
+    ['html'],
+    ['json', { outputFile: 'playwright-report/results.json' }],
+    ['junit', { outputFile: 'playwright-report/results.xml' }]
   ],
   
-  // Output directories
-  outputDir: 'test-results',
-  
+  // Shared settings for all the projects below
   use: {
-    baseURL: 'https://jsonplaceholder.typicode.com',
-    extraHTTPHeaders: {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json'
-    },
+    // Base URL to use in actions like `await page.goto('/')`
+    baseURL: process.env.API_BASE_URL || 'https://jsonplaceholder.typicode.com',
+    
+    // Collect trace when retrying the failed test
     trace: 'on-first-retry',
-    screenshot: 'only-on-failure',
-    video: 'retain-on-failure'
+    
+    // API testing specific settings
+    extraHTTPHeaders: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+    },
   },
-  
+
+  // Configure projects for API testing
   projects: [
     {
-      name: 'API Tests',
-      testDir: './tests/api',
+      name: 'api-tests',
+      testMatch: '**/*.spec.js',
+    },
+    
+    {
+      name: 'performance-tests',
+      testMatch: '**/*performance*.spec.js',
       use: {
-        baseURL: 'https://jsonplaceholder.typicode.com',
+        // Performance tests might need different timeouts
+        timeout: 30000,
       },
     },
   ],
+
+  // Global timeout for each test
+  timeout: 30000,
   
-  // Global setup (optional - can be commented out if causing issues)
-  // globalSetup: './utils/global-setup.js',
+  // Global timeout for the whole test run
+  globalTimeout: 10 * 60 * 1000, // 10 minutes
+  
+  // Expect timeout
+  expect: {
+    timeout: 10000,
+  },
 });
